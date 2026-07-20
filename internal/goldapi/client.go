@@ -71,10 +71,13 @@ func (c *Client) Fetch(ctx context.Context) (gold.Price, error) {
 	}
 	c.log.Debug("fetched", "usd", r.Price)
 	at := time.Now() // fall back to now if the upstream timestamp is missing or unparseable
-	if r.UpdatedAt != "" {
-		if t, err := time.Parse(time.RFC3339, r.UpdatedAt); err == nil {
-			at = t
-		}
+	if t, err := time.Parse(time.RFC3339, r.UpdatedAt); err == nil {
+		at = t
+	} else {
+		// Keep serving (stamped now) but leave a trail: if gold-api.com ever
+		// renames the field or changes the format, this is the only signal that
+		// the timestamp is synthetic rather than the real upstream time.
+		c.log.Debug("no usable timestamp; stamping now", "updatedAt", r.UpdatedAt, "err", err)
 	}
 	return gold.Price{USDPerOunce: r.Price, At: at}, nil
 }

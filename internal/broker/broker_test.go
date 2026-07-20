@@ -60,6 +60,32 @@ func TestNewSubscriberGetsLastPrice(t *testing.T) {
 	}
 }
 
+func TestSlowSubscriberDropsTickWithoutBlocking(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	b := New(slog.New(slog.DiscardHandler))
+	go b.Run(ctx)
+
+	ch := b.Subscribe() // buffered depth 1, deliberately not drained until after the publishes
+
+	// Publishes are serialized through Run, so send order is deterministic: the
+	// first fills the (depth-1) buffer, the rest hit a full buffer and are
+	// dropped by the non-blocking send. None of these must block.
+	b.Publish(gold.Price{USDPerOunce: 1})
+	b.Publish(gold.Price{USDPerOunce: 2})
+	b.Publish(gold.Price{USDPerOunce: 3})
+	time.Sleep(20 * time.Millisecond) // let Run finish fanning out all three before we drain
+
+	if got := recv(t, ch); got.USDPerOunce != 1 {
+		t.Fatalf("first price = %v want 1 (only the buffered tick survives)", got.USDPerOunce)
+	}
+	select {
+	case p := <-ch:
+		t.Fatalf("expected later ticks to be dropped, got %v", p.USDPerOunce)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
 func TestUnsubscribeStopsDelivery(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

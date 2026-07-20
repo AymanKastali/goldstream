@@ -75,9 +75,10 @@ func (b *Broker) Run(ctx context.Context) {
 			}
 			b.log.Debug("fanned out", "delivered", delivered, "dropped", dropped)
 			if dropped > 0 {
-				// A drop is the visible signal of the non-blocking-send back-pressure
-				// design: a slow client misses this tick so it can't stall the others.
-				b.log.Warn("dropped tick for slow subscriber", "dropped", dropped)
+				// A slow client that hasn't drained its buffer misses this tick (the
+				// non-blocking-send back-pressure design). At buffer depth 1 this can
+				// fire every tick under load, so it stays at debug rather than warn.
+				b.log.Debug("dropped tick for slow subscriber", "dropped", dropped)
 			}
 		}
 	}
