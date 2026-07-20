@@ -1,0 +1,12 @@
+services:
+  goldstream:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      # The upstream (gold-api.com) is keyless, so there's no secret to pass.
+      PORT: "8080"
+      POLL_INTERVAL: "60s"
+      RECONNECT_DELAY: "3s"
+      LOG_LEVEL: "debug"
+    restart: unless-stopped

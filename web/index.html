@@ -1,0 +1,256 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>goldstream · live XAU/USD via SSE</title>
+<style>
+  :root {
+    --bg:      #0b0e14;
+    --panel:   #12161f;
+    --border:  #1e2530;
+    --text:    #e6edf3;
+    --muted:   #8b949e;
+    --gold:    #e3b341;
+    --up:      #3fb950;
+    --down:    #f85149;
+    --up-dim:  #3fb95022;
+    --down-dim:#f8514922;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #141a24 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .card {
+    width: 100%;
+    max-width: 30rem;
+    background: linear-gradient(180deg, #12161f 0%, #0f131b 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 24px 60px -20px #000a, 0 2px 0 0 #ffffff08 inset;
+    padding: 1.5rem 1.75rem 1.25rem;
+  }
+
+  /* header */
+  .head { display: flex; align-items: center; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: .55rem; font-weight: 650; letter-spacing: .02em; }
+  .brand .mark { font-size: 1.35rem; }
+  .brand .name { font-size: .95rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: .45rem;
+    font: 600 .7rem/1 ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: .1em; text-transform: uppercase;
+    padding: .4rem .6rem; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--muted);
+    transition: color .3s, border-color .3s, background .3s;
+  }
+  .pill .dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--muted); }
+  .pill.live { color: var(--up); border-color: #3fb95055; background: var(--up-dim); }
+  .pill.live .dot { background: var(--up); animation: pulse 1.6s ease-out infinite; }
+  .pill.down-conn { color: var(--gold); border-color: #e3b34155; background: #e3b34115; }
+  .pill.down-conn .dot { background: var(--gold); }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 #3fb95066; }
+    70%  { box-shadow: 0 0 0 .5rem #3fb95000; }
+    100% { box-shadow: 0 0 0 0 #3fb95000; }
+  }
+
+  /* symbol + price */
+  .symbol { margin: 1.4rem 0 .1rem; font: 600 .8rem/1 ui-monospace, monospace; letter-spacing: .18em; color: var(--muted); }
+  .price {
+    font: 700 3.25rem/1 ui-monospace, "SF Mono", Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+    transition: color .25s;
+  }
+  .price .cents { color: var(--muted); }
+  .price.up   { color: var(--up); }
+  .price.down { color: var(--down); }
+
+  .change { margin-top: .55rem; display: flex; align-items: baseline; gap: .55rem; font-variant-numeric: tabular-nums; }
+  .change .val {
+    font: 600 1rem/1 ui-monospace, monospace;
+    padding: .28rem .5rem; border-radius: 8px; color: var(--muted); background: #ffffff08;
+    transition: color .25s, background .25s;
+  }
+  .change.up .val   { color: var(--up);   background: var(--up-dim); }
+  .change.down .val { color: var(--down); background: var(--down-dim); }
+  .change .meta { font-size: .8rem; color: var(--muted); }
+  .change .at { font-variant-numeric: tabular-nums; }
+
+  /* sparkline */
+  .spark { margin: 1.35rem 0 1rem; }
+  .spark svg { width: 100%; height: 72px; display: block; overflow: visible; }
+  .spark .line { fill: none; stroke: var(--gold); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .spark .area { fill: url(#grad); opacity: .5; }
+  .spark .empty { fill: var(--muted); font: .75rem ui-monospace, monospace; }
+
+  /* stats */
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-top: .25rem; }
+  .stat { border: 1px solid var(--border); border-radius: 10px; padding: .6rem .75rem; background: #ffffff04; }
+  .stat .k { font: .65rem/1 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .stat .v { margin-top: .35rem; font: 600 1.05rem/1 ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .stat.hi .v { color: var(--up); }
+  .stat.lo .v { color: var(--down); }
+
+  /* command box */
+  .cmd { margin-top: 1.35rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  .cmd-tag { display: block; margin-bottom: .5rem;
+             font: .62rem/1 ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .cmd-line { display: flex; align-items: center; gap: .55rem;
+              background: #0b0e14; border: 1px solid var(--border); border-radius: 10px;
+              padding: .5rem .55rem .5rem .7rem; }
+  .cmd-line .prompt { flex: none; color: var(--gold); user-select: none; font: .78rem/1 ui-monospace, monospace; }
+  .cmd-line code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none;
+                   font: .78rem/1.4 ui-monospace, monospace; color: var(--text); background: none; border: none; padding: 0; }
+  .cmd-line code::-webkit-scrollbar { display: none; }
+  .copy {
+    flex: none;
+    background: #ffffff0d; border: 1px solid var(--border); border-radius: 7px;
+    color: var(--muted); cursor: pointer; padding: .32rem .55rem;
+    font: 600 .66rem/1 ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase;
+    transition: color .2s, border-color .2s, background .2s;
+  }
+  .copy:hover { color: var(--text); border-color: var(--muted); }
+  .copy.done { color: var(--up); border-color: #3fb95055; background: var(--up-dim); }
+</style>
+
+<div class="card">
+  <div class="head">
+    <div class="brand"><span class="mark">🥇</span><span class="name">goldstream</span></div>
+    <div id="status" class="pill"><span class="dot"></span><span id="status-text">connecting</span></div>
+  </div>
+
+  <div class="symbol">XAU / USD · SPOT</div>
+  <div id="price" class="price">—</div>
+
+  <div id="change" class="change">
+    <span class="val" id="change-val">—</span>
+    <span class="meta">since open · <span class="at" id="at">—</span></span>
+  </div>
+
+  <div class="spark">
+    <svg viewBox="0 0 300 72" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"  stop-color="var(--gold)" stop-opacity=".35"/>
+          <stop offset="100%" stop-color="var(--gold)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path id="spark-area" class="area" d=""></path>
+      <polyline id="spark-line" class="line" points=""></polyline>
+      <text id="spark-empty" class="empty" x="150" y="40" text-anchor="middle">waiting for ticks…</text>
+    </svg>
+  </div>
+
+  <div class="stats">
+    <div class="stat hi"><div class="k">Session High</div><div class="v" id="high">—</div></div>
+    <div class="stat lo"><div class="k">Session Low</div><div class="v" id="low">—</div></div>
+  </div>
+
+  <div class="cmd">
+    <span class="cmd-tag">Raw SSE stream</span>
+    <div class="cmd-line">
+      <span class="prompt">$</span>
+      <code id="curl">curl -N localhost:8080/events</code>
+      <button id="copy" class="copy" type="button">copy</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const el = (id) => document.getElementById(id);
+  const priceEl  = el("price"),  changeEl = el("change"), changeVal = el("change-val");
+  const highEl   = el("high"),   lowEl    = el("low"),    atEl      = el("at");
+  const statusEl = el("status"), statusTx = el("status-text");
+  const lineEl   = el("spark-line"), areaEl = el("spark-area"), emptyEl = el("spark-empty");
+
+  const usd = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const MAX_POINTS = 60;          // ~1 hour at the default 60s poll interval
+  const history = [];             // recent prices, for the sparkline
+  let first = null, prev = null, high = null, low = null;
+
+  function setStatus(live) {
+    statusEl.className = "pill " + (live ? "live" : "down-conn");
+    statusTx.textContent = live ? "live" : "reconnecting";
+  }
+
+  function renderPrice(v) {
+    const [dollars, cents] = usd.format(v).split(".");
+    priceEl.innerHTML = "$" + dollars + '<span class="cents">.' + cents + "</span>";
+    priceEl.className = "price " + (prev === null ? "" : v >= prev ? "up" : "down");
+  }
+
+  function renderChange(v) {
+    const d = v - first, pct = first ? (d / first) * 100 : 0;
+    const dir = d > 0 ? "up" : d < 0 ? "down" : "";
+    const arrow = d > 0 ? "▲" : d < 0 ? "▼" : "•";
+    changeEl.className = "change " + dir;
+    changeVal.textContent = `${arrow} ${d >= 0 ? "+" : "−"}$${usd.format(Math.abs(d))}  (${d >= 0 ? "+" : "−"}${Math.abs(pct).toFixed(2)}%)`;
+  }
+
+  function renderSpark() {
+    if (history.length < 2) return;
+    emptyEl.style.display = "none";
+    const W = 300, H = 72, pad = 4;
+    const min = Math.min(...history), max = Math.max(...history);
+    const span = max - min || 1;
+    const x = (i) => (i / (history.length - 1)) * W;
+    const y = (v) => pad + (1 - (v - min) / span) * (H - pad * 2);
+    const pts = history.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+    lineEl.setAttribute("points", pts.join(" "));
+    areaEl.setAttribute("d", `M0,${H} L${pts.join(" L")} L${W},${H} Z`);
+  }
+
+  const curlCmd = `curl -N ${location.host}/events`;   // match whatever host/port served this page
+  el("curl").textContent = curlCmd;
+
+  const copyBtn = el("copy");
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(curlCmd);
+    } catch {
+      // clipboard API needs a secure context (https/localhost); fall back to a range selection
+      const r = document.createRange();
+      r.selectNode(el("curl"));
+      const sel = getSelection();
+      sel.removeAllRanges(); sel.addRange(r);
+      document.execCommand("copy");
+      sel.removeAllRanges();
+    }
+    copyBtn.textContent = "copied";
+    copyBtn.classList.add("done");
+    setTimeout(() => { copyBtn.textContent = "copy"; copyBtn.classList.remove("done"); }, 1400);
+  });
+
+  const es = new EventSource("/events");
+  es.onopen  = () => setStatus(true);
+  es.onerror = () => setStatus(false);        // EventSource auto-reconnects
+  es.addEventListener("price", (e) => {
+    const d = JSON.parse(e.data), v = d.usd;
+    if (first === null) first = v;
+    high = high === null ? v : Math.max(high, v);
+    low  = low  === null ? v : Math.min(low,  v);
+
+    renderPrice(v);
+    renderChange(v);
+    highEl.textContent = "$" + usd.format(high);
+    lowEl.textContent  = "$" + usd.format(low);
+    atEl.textContent   = new Date(d.at).toLocaleTimeString();
+
+    history.push(v);
+    if (history.length > MAX_POINTS) history.shift();
+    renderSpark();
+
+    prev = v;
+    setStatus(true);
+  });
+</script>
