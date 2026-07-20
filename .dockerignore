@@ -1,0 +1,9 @@
+.git
+.gitignore
+.env
+*.out
+/goldstream
+Dockerfile
+.dockerignore
+compose.yaml
+README.md

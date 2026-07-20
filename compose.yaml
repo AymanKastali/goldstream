@@ -1,0 +1,11 @@
+services:
+  goldstream:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      # Compose auto-loads a local .env file. Get a free key at goldapi.io.
+      GOLDAPI_KEY: ${GOLDAPI_KEY:?set GOLDAPI_KEY (free key at https://www.goldapi.io)}
+      PORT: "8080"
+      POLL_INTERVAL: "60s"
+    restart: unless-stopped

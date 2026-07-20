@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>goldstream · live XAU/USD via SSE</title>
+<style>
+  body { font: 16px system-ui, sans-serif; margin: 3rem auto; max-width: 32rem; padding: 0 1rem; }
+  #price { font-size: 4rem; font-weight: 700; transition: color .3s; }
+  .up { color: #148f4b } .down { color: #c02626 }
+  #status { color: #888 } #at { color: #888; font-size: .85rem }
+  code { background: #f2f2f2; padding: .1rem .3rem; border-radius: 4px; }
+</style>
+<h1>🥇 goldstream</h1>
+<p>Live spot gold (XAU/USD), streamed from the server over <b>Server-Sent Events</b>.</p>
+<div id="price">—</div>
+<div id="at"></div>
+<p id="status">connecting…</p>
+<p>See the raw stream with <code>curl -N /events</code>.</p>
+<script>
+  const priceEl = document.getElementById("price");
+  const atEl = document.getElementById("at");
+  const statusEl = document.getElementById("status");
+  let last = null;
+
+  const es = new EventSource("/events");
+  es.onopen = () => (statusEl.textContent = "● live");
+  es.onerror = () => (statusEl.textContent = "● reconnecting…"); // EventSource auto-reconnects
+  es.addEventListener("price", (e) => {
+    const d = JSON.parse(e.data);
+    priceEl.textContent = "$" + d.usd.toFixed(2);
+    priceEl.className = last === null ? "" : d.usd >= last ? "up" : "down";
+    atEl.textContent = "as of " + new Date(d.at).toLocaleTimeString();
+    last = d.usd;
+  });
+</script>
