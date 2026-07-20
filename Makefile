@@ -3,11 +3,10 @@
 BINARY := goldstream
 IMAGE  := goldstream
 
-# Load a local .env (GOLDAPI_KEY, PORT, ...) if present, so `make run` just works.
-ifneq (,$(wildcard .env))
-include .env
-export
-endif
+# Source a local .env (GOLDAPI_KEY, PORT, ...) into the shell if present, so
+# `make run` just works. Sourcing (not make's `include`) is used so shell-style
+# quoting in .env is stripped correctly — the same way docker compose reads it.
+load_env = if [ -f .env ]; then set -a && . ./.env && set +a; fi;
 
 .PHONY: help run build test race vet fmt docker compose clean
 
@@ -15,8 +14,8 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(firstword $(MAKEFILE_LIST)) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
 
-run: ## Run the server (needs GOLDAPI_KEY in the environment or .env)
-	go run ./cmd/goldstream
+run: ## Run the server (loads GOLDAPI_KEY etc. from .env if present)
+	@$(load_env) go run ./cmd/goldstream
 
 build: ## Compile the binary into ./goldstream
 	go build -o $(BINARY) ./cmd/goldstream
