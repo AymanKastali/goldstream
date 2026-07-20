@@ -34,6 +34,28 @@ func TestFetchParsesPrice(t *testing.T) {
 	}
 }
 
+func TestFetchFallsBackToNowOnBadTimestamp(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Valid price, but an unparseable timestamp — the client should keep
+		// serving and stamp ~now rather than erroring out.
+		_, _ = w.Write([]byte(`{"price":2400,"updatedAt":"not-a-timestamp"}`))
+	}))
+	defer srv.Close()
+
+	before := time.Now()
+	c := New(srv.URL, srv.Client(), slog.New(slog.DiscardHandler))
+	p, err := c.Fetch(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.USDPerOunce != 2400 {
+		t.Fatalf("price = %v want 2400", p.USDPerOunce)
+	}
+	if p.At.Before(before) {
+		t.Fatalf("At = %v, expected fallback to ~now (>= %v)", p.At, before)
+	}
+}
+
 func TestFetchErrorsOnNon200(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)

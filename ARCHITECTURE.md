@@ -462,13 +462,12 @@ terminal — no external tooling.
   `remote=<addr>`, so with several browsers open you can still follow one client's
   frames end-to-end. The count comes from an `atomic.Int64` on the server.
 - **Level-controlled via `LOG_LEVEL`** (default `debug`). Debug prints every step;
-  `info` narrows to lifecycle only; a slow-client drop is surfaced at `warn`:
+  `info` narrows to lifecycle only:
 
   | Level   | What you see                                                                 |
   | ------- | ---------------------------------------------------------------------------- |
   | `info`  | config loaded · broker/poller started · client connected/disconnected · listening · shutting down |
-  | `debug` | + poll tick · goldapi requesting/responded/fetched · publishing · publish received · fanned out · subscriber added/removed · replaying · sent retry hint · subscribed · sent price frame · sent keep-alive |
-  | `warn`  | dropped tick for a slow subscriber (the visible signal of the non-blocking-send back-pressure) |
+  | `debug` | + poll tick · goldapi requesting/responded/fetched · publishing · publish received · fanned out · dropped tick (slow subscriber) · subscriber added/removed · replaying · sent retry hint · subscribed · sent price frame · sent keep-alive |
 
 - **Errors are logged once.** A failed upstream fetch is *not* logged inside the
   goldapi client; it is returned to the poller, which logs it a single time at

@@ -3,6 +3,7 @@ package poller
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -55,6 +56,11 @@ func (p *Poller) PollOnce(ctx context.Context) {
 	defer cancel()
 	price, err := p.fetcher.Fetch(ctx)
 	if err != nil {
+		// A canceled context means we're shutting down, not a real failure —
+		// don't cry wolf with an ERROR on every clean stop.
+		if errors.Is(err, context.Canceled) {
+			return
+		}
 		p.log.Error("gold price fetch failed", "err", err)
 		return
 	}
