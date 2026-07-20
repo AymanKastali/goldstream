@@ -28,11 +28,12 @@ type Poller struct {
 // New returns a Poller. interval is the gap between fetches; timeout bounds
 // each individual fetch.
 func New(f Fetcher, publish func(gold.Price), interval, timeout time.Duration, log *slog.Logger) *Poller {
-	return &Poller{fetcher: f, publish: publish, interval: interval, timeout: timeout, log: log}
+	return &Poller{fetcher: f, publish: publish, interval: interval, timeout: timeout, log: log.With("component", "poller")}
 }
 
 // Run fetches immediately, then every interval, until ctx is cancelled.
 func (p *Poller) Run(ctx context.Context) {
+	p.log.Info("poller started", "interval", p.interval)
 	p.PollOnce(ctx) // fetch immediately so the first viewer isn't blank
 	t := time.NewTicker(p.interval)
 	defer t.Stop()
@@ -41,6 +42,7 @@ func (p *Poller) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+			p.log.Debug("poll tick") // fires once per interval, so it stays at debug
 			p.PollOnce(ctx)
 		}
 	}
@@ -57,5 +59,6 @@ func (p *Poller) PollOnce(ctx context.Context) {
 		return
 	}
 	p.log.Info("gold price", "usd_per_oz", price.USDPerOunce)
+	p.log.Debug("publishing to broker", "usd", price.USDPerOunce)
 	p.publish(price)
 }

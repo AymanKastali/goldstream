@@ -27,39 +27,69 @@ func (s *server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	// response without type-asserting http.Flusher.
 	stream := http.NewResponseController(w)
 
-	prices := s.broker.Subscribe()
-	defer s.broker.Unsubscribe(prices)
+	// One id per connection so a single browser's frames can be followed in the
+	// logs even when several clients are connected at once.
+	connID := s.conns.Add(1)
+	log := s.log.With("conn", connID, "remote", r.RemoteAddr)
+	log.Info("client connected")
 
-	heartbeat := time.NewTicker(heartbeatInterval)
-	defer heartbeat.Stop()
-
-	ctx := r.Context()
 	// eventID restarts at 1 per connection and we don't read the client's
 	// Last-Event-ID header: gap-free resumption is intentionally out of scope.
 	// This stream only ever shows the latest price, and the broker replays the
 	// current price on subscribe, so a reconnecting client loses nothing.
 	var eventID int
+
+	// reason is set on each exit path and reported once by this deferred line,
+	// so every disconnect is accounted for (clean close vs shutdown vs write error).
+	reason := "unknown"
+	defer func() { log.Info("client disconnected", "reason", reason, "frames", eventID) }()
+
+	// Tell the browser how long to wait before reconnecting after a drop. Sent
+	// once, up front, and flushed immediately so a client that reconnects and
+	// drops again still learns the delay. EventSource remembers it for the life
+	// of the stream.
+	fmt.Fprintf(w, "retry: %d\n\n", s.reconnectDelay.Milliseconds())
+	if stream.Flush() != nil {
+		reason = "write error"
+		return
+	}
+	log.Debug("sent retry hint", "ms", s.reconnectDelay.Milliseconds())
+
+	prices := s.broker.Subscribe()
+	defer s.broker.Unsubscribe(prices)
+	log.Debug("subscribed to broker")
+
+	heartbeat := time.NewTicker(heartbeatInterval)
+	defer heartbeat.Stop()
+
+	ctx := r.Context()
 	for {
 		select {
 		case <-ctx.Done(): // browser closed the tab or navigated away
+			reason = "context canceled"
 			return
 
 		case price, ok := <-prices:
 			if !ok { // broker is shutting down
+				reason = "broker shutdown"
 				return
 			}
 			eventID++
 			fmt.Fprintf(w, "id: %d\nevent: price\ndata: {\"usd\":%.2f,\"at\":%q}\n\n",
 				eventID, price.USDPerOunce, price.At.Format(time.RFC3339))
 			if stream.Flush() != nil {
+				reason = "write error"
 				return
 			}
+			log.Debug("sent price frame", "id", eventID, "usd", price.USDPerOunce)
 
 		case <-heartbeat.C:
 			fmt.Fprint(w, ": keep-alive\n\n")
 			if stream.Flush() != nil {
+				reason = "write error"
 				return
 			}
+			log.Debug("sent keep-alive")
 		}
 	}
 }

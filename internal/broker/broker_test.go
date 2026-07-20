@@ -2,6 +2,7 @@ package broker
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -22,7 +23,7 @@ func recv(t *testing.T, ch chan gold.Price) gold.Price {
 func TestPublishReachesSubscriber(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	b := New()
+	b := New(slog.New(slog.DiscardHandler))
 	go b.Run(ctx)
 
 	ch := b.Subscribe()
@@ -35,7 +36,7 @@ func TestPublishReachesSubscriber(t *testing.T) {
 func TestFanOutToAllSubscribers(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	b := New()
+	b := New(slog.New(slog.DiscardHandler))
 	go b.Run(ctx)
 
 	a, c := b.Subscribe(), b.Subscribe()
@@ -48,7 +49,7 @@ func TestFanOutToAllSubscribers(t *testing.T) {
 func TestNewSubscriberGetsLastPrice(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	b := New()
+	b := New(slog.New(slog.DiscardHandler))
 	go b.Run(ctx)
 
 	b.Publish(gold.Price{USDPerOunce: 2402})
@@ -62,7 +63,7 @@ func TestNewSubscriberGetsLastPrice(t *testing.T) {
 func TestUnsubscribeStopsDelivery(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	b := New()
+	b := New(slog.New(slog.DiscardHandler))
 	go b.Run(ctx)
 
 	ch := b.Subscribe()

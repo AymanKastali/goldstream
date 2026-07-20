@@ -15,7 +15,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/goldstr
 
 # ---- runtime stage ----
 # distroless/static ships CA certificates (needed for the HTTPS call to
-# goldapi.io) and runs as a non-root user by default.
+# gold-api.com) and runs as a non-root user by default.
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /bin/goldstream /goldstream
 EXPOSE 8080

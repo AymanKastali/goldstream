@@ -4,8 +4,9 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # Compose auto-loads a local .env file. Get a free key at goldapi.io.
-      GOLDAPI_KEY: ${GOLDAPI_KEY:?set GOLDAPI_KEY (free key at https://www.goldapi.io)}
+      # The upstream (gold-api.com) is keyless, so there's no secret to pass.
       PORT: "8080"
       POLL_INTERVAL: "60s"
+      RECONNECT_DELAY: "3s"
+      LOG_LEVEL: "debug"
     restart: unless-stopped

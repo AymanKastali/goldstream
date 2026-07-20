@@ -6,7 +6,6 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
-	t.Setenv("GOLDAPI_KEY", "k")
 	t.Setenv("PORT", "")
 	t.Setenv("POLL_INTERVAL", "")
 
@@ -31,15 +30,7 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
-func TestLoadRequiresKey(t *testing.T) {
-	t.Setenv("GOLDAPI_KEY", "")
-	if _, err := Load(); err == nil {
-		t.Fatal("expected error when GOLDAPI_KEY is missing")
-	}
-}
-
 func TestLoadAppliesOverrides(t *testing.T) {
-	t.Setenv("GOLDAPI_KEY", "k")
 	t.Setenv("PORT", "9090")
 	t.Setenv("POLL_INTERVAL", "30s")
 
@@ -58,11 +49,17 @@ func TestLoadAppliesOverrides(t *testing.T) {
 func TestLoadRejectsBadPollInterval(t *testing.T) {
 	for _, bad := range []string{"abc", "0s", "-5s"} {
 		t.Run(bad, func(t *testing.T) {
-			t.Setenv("GOLDAPI_KEY", "k")
 			t.Setenv("POLL_INTERVAL", bad)
 			if _, err := Load(); err == nil {
 				t.Fatalf("expected error for POLL_INTERVAL=%q", bad)
 			}
 		})
+	}
+}
+
+func TestLoadRejectsBadLogLevel(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "bogus")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error for invalid LOG_LEVEL")
 	}
 }

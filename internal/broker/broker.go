@@ -2,6 +2,7 @@ package broker
 
 import (
 	"context"
+	"log/slog"
 
 	"goldstream/internal/gold"
 )
@@ -14,15 +15,17 @@ type Broker struct {
 	unsubscribeCh chan chan gold.Price
 	publishCh     chan gold.Price
 	done          chan struct{} // closed when Run returns
+	log           *slog.Logger
 }
 
 // New returns a Broker. Call Run in its own goroutine before using it.
-func New() *Broker {
+func New(log *slog.Logger) *Broker {
 	return &Broker{
 		subscribeCh:   make(chan chan gold.Price),
 		unsubscribeCh: make(chan chan gold.Price),
 		publishCh:     make(chan gold.Price),
 		done:          make(chan struct{}),
+		log:           log.With("component", "broker"),
 	}
 }
 
@@ -36,9 +39,11 @@ func (b *Broker) Run(ctx context.Context) {
 	var last gold.Price
 	var hasLast bool
 
+	b.log.Info("broker started")
 	for {
 		select {
 		case <-ctx.Done():
+			b.log.Info("broker stopping", "subscribers", len(subs))
 			for ch := range subs {
 				delete(subs, ch)
 				close(ch)
@@ -46,29 +51,47 @@ func (b *Broker) Run(ctx context.Context) {
 			return
 		case ch := <-b.subscribeCh:
 			subs[ch] = struct{}{}
+			b.log.Debug("subscriber added", "subscribers", len(subs))
 			if hasLast {
 				send(ch, last) // replay the current price to a fresh viewer
+				b.log.Debug("replaying last price to new subscriber", "usd", last.USDPerOunce)
 			}
 		case ch := <-b.unsubscribeCh:
 			if _, ok := subs[ch]; ok {
 				delete(subs, ch)
 				close(ch)
+				b.log.Debug("subscriber removed", "subscribers", len(subs))
 			}
 		case p := <-b.publishCh:
 			last, hasLast = p, true
+			b.log.Debug("publish received", "usd", p.USDPerOunce, "subscribers", len(subs))
+			var delivered, dropped int
 			for ch := range subs {
-				send(ch, p)
+				if send(ch, p) {
+					delivered++
+				} else {
+					dropped++
+				}
+			}
+			b.log.Debug("fanned out", "delivered", delivered, "dropped", dropped)
+			if dropped > 0 {
+				// A drop is the visible signal of the non-blocking-send back-pressure
+				// design: a slow client misses this tick so it can't stall the others.
+				b.log.Warn("dropped tick for slow subscriber", "dropped", dropped)
 			}
 		}
 	}
 }
 
 // send is non-blocking: a slow client that hasn't drained its buffer simply
-// misses this tick rather than stalling every other subscriber.
-func send(ch chan gold.Price, p gold.Price) {
+// misses this tick rather than stalling every other subscriber. It reports
+// whether the price was delivered (true) or dropped (false).
+func send(ch chan gold.Price, p gold.Price) bool {
 	select {
 	case ch <- p:
+		return true
 	default:
+		return false
 	}
 }
 

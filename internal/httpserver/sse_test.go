@@ -3,6 +3,7 @@ package httpserver
 import (
 	"bufio"
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,10 +23,10 @@ func TestSSEStreamsPriceFrame(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	b := broker.New()
+	b := broker.New(slog.New(slog.DiscardHandler))
 	go b.Run(ctx)
 
-	srv := httptest.NewServer(New(b))
+	srv := httptest.NewServer(New(b, 2*time.Second, slog.New(slog.DiscardHandler)))
 	defer srv.Close()
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/events", nil)
@@ -37,6 +38,12 @@ func TestSSEStreamsPriceFrame(t *testing.T) {
 
 	if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream" {
 		t.Fatalf("Content-Type = %q want text/event-stream", ct)
+	}
+
+	// The stream opens with a retry: hint (in ms) telling the browser how long
+	// to wait before reconnecting.
+	if retry := readEventFrame(t, resp.Body, "retry:"); !strings.Contains(retry, "retry: 2000") {
+		t.Fatalf("expected retry: 2000 hint, got %q", retry)
 	}
 
 	time.Sleep(20 * time.Millisecond) // ensure the handler has subscribed

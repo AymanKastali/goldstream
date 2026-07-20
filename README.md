@@ -10,14 +10,14 @@ events, event IDs, heartbeats, and automatic browser reconnection.
 
 ## How it works
 
-The server polls [goldapi.io](https://www.goldapi.io) once per interval and **fans each
+The server polls [gold-api.com](https://gold-api.com) once per interval and **fans each
 update out to every connected browser** through an in-process broker. Because the poll
-is shared, upstream API calls stay flat no matter how many people are watching — which
-keeps you inside free-tier rate limits.
+is shared, upstream API calls stay flat no matter how many people are watching. The
+upstream is **keyless and unmetered**, so there's nothing to sign up for.
 
 ```
                           ┌─────────────┐   SSE    ┌─────────┐
- goldapi.io ── poll ──▶  │   broker    │ ───────▶ │ browser │
+ gold-api.com ─ poll ─▶  │   broker    │ ───────▶ │ browser │
  (1 call / interval)     │  (fan-out)  │ ───────▶ │ browser │
                           └─────────────┘ ───────▶ │  curl   │
 ```
@@ -25,18 +25,19 @@ keeps you inside free-tier rate limits.
 - **`internal/gold`** — the `Price` value type (domain).
 - **`internal/broker`** — a single-goroutine pub/sub hub; the poller publishes, every SSE handler subscribes.
 - **`internal/poller`** — fetches on a ticker, with a per-call timeout; keeps the last value on error.
-- **`internal/goldapi`** — the goldapi.io HTTP client.
+- **`internal/goldapi`** — the gold-api.com HTTP client.
 - **`internal/httpserver`** — the SSE handler (`internal/httpserver/sse.go`) and routes.
 - **`cmd/goldstream`** — wiring and graceful shutdown.
 
 ## Run it
 
-You need a free API key from [goldapi.io](https://www.goldapi.io) and Go 1.26+.
+You just need Go 1.26+ — the upstream ([gold-api.com](https://gold-api.com)) needs no key.
 
 ```bash
-export GOLDAPI_KEY=your-key-here      # required
 export PORT=8080                      # optional (default 8080)
 export POLL_INTERVAL=60s              # optional (default 60s)
+export RECONNECT_DELAY=3s             # optional (default 3s) — browser reconnect wait
+export LOG_LEVEL=debug                # optional (default debug) — info to quiet the per-step trace
 
 go run ./cmd/goldstream        # or: make run
 ```
@@ -51,14 +52,14 @@ red when it ticks down. No page refresh, ever.
 ## Run it with Docker
 
 The image is a static binary on a distroless base (~a few MB, non-root, CA
-certs included for the HTTPS call to goldapi.io).
+certs included for the HTTPS call to gold-api.com).
 
 ```bash
 docker build -t goldstream .
-docker run --rm -p 8080:8080 -e GOLDAPI_KEY=your-key-here goldstream
+docker run --rm -p 8080:8080 goldstream
 ```
 
-Or with Compose (put `GOLDAPI_KEY=...` in a local `.env` file, then):
+Or with Compose:
 
 ```bash
 docker compose up --build
