@@ -38,8 +38,12 @@ export GOLDAPI_KEY=your-key-here      # required
 export PORT=8080                      # optional (default 8080)
 export POLL_INTERVAL=60s              # optional (default 60s)
 
-go run ./cmd/goldstream
+go run ./cmd/goldstream        # or: make run
 ```
+
+There's a `Makefile` for the common tasks — `make help` lists them (`run`, `build`,
+`test`, `race`, `vet`, `fmt`, `docker`, `compose`). It auto-loads a local `.env`, so
+once your key is there, `make run` is all you need.
 
 Then open <http://localhost:8080> — the price updates live, green when it ticks up,
 red when it ticks down. No page refresh, ever.
